@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GlobalSource | Procurement Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+<div id="app" class="min-h-screen">
+    <nav class="bg-blue-900 text-white p-4 shadow-lg">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold tracking-tight">GlobalSource <span class="text-blue-400">Pro</span></h1>
+            <div class="space-x-6">
+                <a href="#" class="hover:text-blue-300">Dashboard</a>
+                <a href="#" class="hover:text-blue-300">My RFQs</a>
+                <button @click="showModal = true" class="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg text-sm font-semibold">Post New Requirement</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mx-auto py-8 px-4">
+        <div class="mb-8 bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-wrap gap-4 items-center">
+            <input v-model="searchQuery" type="text" placeholder="Search suppliers or materials..." class="flex-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+            <select v-model="filterCategory" class="p-3 border rounded-lg bg-white">
+                <option value="All">All Categories</option>
+                <option value="Electronics">Electronics</option>
+                <option value="Textiles">Textiles</option>
+                <option value="Raw Materials">Raw Materials</option>
+            </select>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div v-for="supplier in filteredSuppliers" :key="supplier.id" class="bg-white rounded-xl shadow-md overflow-hidden border border-gray-100 hover:shadow-xl transition-shadow">
+                <div class="p-6">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <span class="text-xs font-bold uppercase text-blue-600 bg-blue-50 px-2 py-1 rounded">{{ supplier.category }}</span>
+                            <h3 class="text-xl font-bold mt-2">{{ supplier.name }}</h3>
+                        </div>
+                        <span class="text-yellow-500 font-bold">★ {{ supplier.rating }}</span>
+                    </div>
+                    <p class="text-gray-500 text-sm mb-4">📍 {{ supplier.location }} • Verified Supplier</p>
+                    <div class="flex gap-2">
+                        <button @click="contactSupplier(supplier)" class="flex-1 bg-gray-800 text-white py-2 rounded-lg hover:bg-black transition">Message</button>
+                        <button @click="openRFQ(supplier)" class="flex-1 border border-blue-600 text-blue-600 py-2 rounded-lg hover:bg-blue-50 transition">Request Quote</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div v-if="showModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-8 shadow-2xl">
+            <h2 class="text-2xl font-bold mb-4">Submit RFQ to {{ selectedSupplier?.name || 'Suppliers' }}</h2>
+            <form @submit.prevent="submitRFQ">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Product Details</label>
+                        <textarea required v-model="rfqData.details" class="w-full p-3 border rounded-lg" rows="3" placeholder="Describe what you need..."></textarea>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Quantity</label>
+                            <input required v-model="rfqData.quantity" type="number" class="w-full p-3 border rounded-lg">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Target Price (USD)</label>
+                            <input v-model="rfqData.price" type="number" class="w-full p-3 border rounded-lg">
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-8 flex gap-3">
+                    <button type="button" @click="showModal = false" class="flex-1 py-3 text-gray-600 font-semibold">Cancel</button>
+                    <button type="submit" class="flex-1 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700">Send Request</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    const { createApp, ref, computed } = Vue;
+
+    createApp({
+        setup() {
+            const showModal = ref(false);
+            const searchQuery = ref('');
+            const filterCategory = ref('All');
+            const selectedSupplier = ref(null);
+            
+            const rfqData = ref({
+                details: '',
+                quantity: 1000,
+                price: ''
+            });
+
+            const suppliers = ref([
+                { id: 1, name: "Global Tech Solutions", category: "Electronics", rating: 4.8, location: "Shenzhen, CN" },
+                { id: 2, name: "EcoFabrics Ltd", category: "Textiles", rating: 4.5, location: "Hanoi, VN" },
+                { id: 3, name: "SteelWorks Corp", category: "Raw Materials", rating: 4.2, location: "Hamburg, DE" },
+                { id: 4, name: "Precision Optics", category: "Electronics", rating: 4.9, location: "Tokyo, JP" },
+                { id: 5, name: "Nordic Lumber", category: "Raw Materials", rating: 4.7, location: "Oslo, NO" },
+                { id: 6, name: "Silk Route Textiles", category: "Textiles", rating: 4.3, location: "Mumbai, IN" }
+            ]);
+
+            const filteredSuppliers = computed(() => {
+                return suppliers.value.filter(s => {
+                    const matchesSearch = s.name.toLowerCase().includes(searchQuery.value.toLowerCase());
+                    const matchesCat = filterCategory.value === 'All' || s.category === filterCategory.value;
+                    return matchesSearch && matchesCat;
+                });
+            });
+
+            const openRFQ = (supplier) => {
+                selectedSupplier.value = supplier;
+                showModal.value = true;
+            };
+
+            const submitRFQ = () => {
+                alert(`Success! RFQ for ${rfqData.value.quantity} units sent to ${selectedSupplier.value?.name || 'selected suppliers'}.`);
+                showModal.value = false;
+                rfqData.value = { details: '', quantity: 1000, price: '' };
+            };
+
+            const contactSupplier = (s) => alert(`Opening chat with ${s.name}...`);
+
+            return {
+                suppliers, searchQuery, filterCategory, filteredSuppliers,
+                showModal, rfqData, selectedSupplier, openRFQ, submitRFQ, contactSupplier
+            }
+        }
+    }).mount('#app')
+</script>
+</body>
+</html>
