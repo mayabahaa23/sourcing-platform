@@ -3,139 +3,121 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bulk Source | Google Sheets & Gmail</title>
+    <title>Private Source | Local Database</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
 </head>
-<body class="bg-slate-100 text-slate-900">
+<body class="bg-slate-50 text-slate-900">
 
 <div id="app" class="min-h-screen">
-    <header class="bg-indigo-700 text-white p-6 shadow-lg">
-        <div class="container mx-auto">
-            <h1 class="text-3xl font-bold">AutoRFQ Dispatcher</h1>
-            <p class="text-indigo-200">Connected to Google Sheet: <span class="underline text-white">Live Database</span></p>
-        </div>
-    </header>
+    <nav class="bg-slate-900 text-white p-6 flex justify-between items-center">
+        <h1 class="text-xl font-bold">SecureSource <span class="text-emerald-400">Private</span></h1>
+        <label class="bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg cursor-pointer text-sm font-bold transition">
+            Update Vendor Database (Excel)
+            <input type="file" @change="handleLocalUpload" class="hidden" accept=".xlsx, .xls">
+        </label>
+    </nav>
 
     <main class="container mx-auto py-10 px-4">
-        <div class="max-w-4xl mx-auto">
-            
-            <div class="bg-white p-8 rounded-2xl shadow-sm mb-6 border border-slate-200">
-                <h2 class="text-xl font-bold mb-4 flex items-center">
-                    <span class="bg-indigo-100 text-indigo-700 w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">1</span>
-                    Choose RFQ Category
-                </h2>
-                <div class="flex flex-wrap gap-3">
-                    <button v-for="cat in uniqueCategories" @click="selectedCategory = cat"
-                        :class="selectedCategory === cat ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-50 text-slate-600 border border-slate-200'"
-                        class="px-6 py-3 rounded-xl font-bold transition-all">
+        <div v-if="vendors.length === 0" class="text-center py-20 bg-white rounded-3xl border border-slate-200 shadow-sm">
+            <h2 class="text-2xl font-bold text-slate-400 italic">Database Empty</h2>
+            <p class="text-slate-400 mt-2">Please upload your private Excel file to start sourcing.</p>
+        </div>
+
+        <div v-else class="max-w-5xl mx-auto">
+            <div class="mb-8">
+                <h3 class="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Select Sourcing Category</h3>
+                <div class="flex flex-wrap gap-2">
+                    <button v-for="cat in categories" @click="selectedCategory = cat"
+                        :class="selectedCategory === cat ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-slate-200'"
+                        class="px-5 py-2 rounded-lg font-bold transition shadow-sm">
                         {{ cat }}
                     </button>
                 </div>
             </div>
 
-            <div v-if="selectedCategory" class="bg-white p-8 rounded-2xl shadow-sm mb-6 border border-slate-200 animate-fade-in">
-                <h2 class="text-xl font-bold mb-4 flex items-center">
-                    <span class="bg-indigo-100 text-indigo-700 w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">2</span>
-                    Targeted Vendors ({{ targetedVendors.length }})
-                </h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div v-for="v in targetedVendors" class="p-4 bg-slate-50 rounded-lg border border-slate-100 flex justify-between">
-                        <div>
-                            <p class="font-bold text-slate-800">{{ v.Name }}</p>
-                            <p class="text-xs text-slate-500">{{ v.Email }}</p>
-                        </div>
-                        <span class="text-green-500 text-xs font-bold self-center">READY</span>
-                    </div>
+            <div v-if="selectedCategory" class="bg-white p-8 rounded-3xl border border-slate-200 shadow-xl border-t-4 border-t-emerald-500">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold">Send RFQ to all {{ filteredVendors.length }} Vendors</h2>
+                    <span class="text-xs bg-slate-100 px-3 py-1 rounded-full font-mono">Category: {{ selectedCategory }}</span>
                 </div>
-            </div>
 
-            <div v-if="selectedCategory" class="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-                <h2 class="text-xl font-bold mb-4 flex items-center">
-                    <span class="bg-indigo-100 text-indigo-700 w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">3</span>
-                    RFQ Message
-                </h2>
-                <textarea v-model="rfqMessage" class="w-full h-40 p-4 bg-slate-50 border rounded-xl mb-6 focus:ring-2 focus:ring-indigo-500 outline-none" 
-                    placeholder="Describe the items you need to source..."></textarea>
+                <textarea v-model="rfqText" class="w-full h-48 p-5 bg-slate-50 border border-slate-200 rounded-2xl mb-6 focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Type your RFQ details here..."></textarea>
                 
-                <button @click="bulkSendEmails" :disabled="sending || targetedVendors.length === 0"
-                    class="w-full py-4 bg-indigo-600 text-white rounded-xl font-black text-xl hover:bg-indigo-700 transition shadow-xl disabled:bg-slate-300">
-                    {{ sending ? 'SENDING IN PROGRESS...' : 'DISPATCH TO ALL VENDORS' }}
+                <button @click="dispatchBulk" :disabled="sending" class="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black text-xl hover:bg-emerald-700 transition shadow-lg disabled:bg-slate-300">
+                    {{ sending ? 'SENDING...' : 'DISPATCH VIA PLATFORM GMAIL' }}
                 </button>
             </div>
-
         </div>
     </main>
 </div>
 
 <script>
-    // --- SETTINGS ---
-    const GOOGLE_SHEET_CSV_URL = "YOUR_PUBLISHED_CSV_URL_HERE";
-    const EMAILJS_KEY = "YOUR_PUBLIC_KEY";
-    const SERVICE_ID = "YOUR_SERVICE_ID";
-    const TEMPLATE_ID = "YOUR_TEMPLATE_ID";
-
-    emailjs.init(EMAILJS_KEY);
+    // Initialize EmailJS
+    emailjs.init("YOUR_PUBLIC_KEY");
 
     const { createApp, ref, computed, onMounted } = Vue;
 
     createApp({
         setup() {
-            const allVendors = ref([]);
+            const vendors = ref([]);
             const selectedCategory = ref('');
-            const rfqMessage = ref('');
+            const rfqText = ref('');
             const sending = ref(false);
 
-            // Fetch live data from Google Sheets
-            const loadData = () => {
-                Papa.parse(GOOGLE_SHEET_CSV_URL, {
-                    download: true,
-                    header: true,
-                    complete: (results) => {
-                        allVendors.value = results.data;
-                    }
-                });
+            // On Load: Try to get data from browser memory
+            onMounted(() => {
+                const savedData = localStorage.getItem('vendor_db');
+                if (savedData) vendors.value = JSON.parse(savedData);
+            });
+
+            const handleLocalUpload = (e) => {
+                const file = e.target.files[0];
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const data = new Uint8Array(event.target.result);
+                    const wb = XLSX.read(data, { type: 'array' });
+                    const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+                    
+                    // Save to State and Browser Memory
+                    vendors.value = json;
+                    localStorage.setItem('vendor_db', JSON.stringify(json));
+                    alert("Database updated and saved locally!");
+                };
+                reader.readAsArrayBuffer(file);
             };
 
-            const uniqueCategories = computed(() => {
-                const cats = new Set(allVendors.value.map(v => v.Category).filter(c => c));
+            const categories = computed(() => {
+                const cats = new Set(vendors.value.map(v => v.Category).filter(c => c));
                 return Array.from(cats);
             });
 
-            const targetedVendors = computed(() => {
-                return allVendors.value.filter(v => v.Category === selectedCategory.value);
+            const filteredVendors = computed(() => {
+                return vendors.value.filter(v => v.Category === selectedCategory.value);
             });
 
-            const bulkSendEmails = async () => {
-                if (!confirm(`Are you sure you want to send this RFQ to ${targetedVendors.value.length} vendors?`)) return;
-                
+            const dispatchBulk = async () => {
+                if(!confirm(`Send RFQ to ${filteredVendors.value.length} vendors?`)) return;
                 sending.value = true;
-                let successCount = 0;
-
-                for (const vendor of targetedVendors.value) {
+                
+                for (let vendor of filteredVendors.value) {
                     try {
-                        await emailjs.send(SERVICE_ID, TEMPLATE_ID, {
-                            vendor_name: vendor.Name,
+                        await emailjs.send("YOUR_SERVICE_ID", "YOUR_TEMPLATE_ID", {
                             to_email: vendor.Email,
-                            message: rfqMessage.value,
-                            category: selectedCategory.value
+                            vendor_name: vendor.Name,
+                            message: rfqText.value
                         });
-                        successCount++;
-                    } catch (err) {
-                        console.error(`Failed to send to ${vendor.Email}`, err);
-                    }
+                    } catch (e) { console.error("Failed:", vendor.Email); }
                 }
 
-                alert(`Done! ${successCount} out of ${targetedVendors.value.length} RFQs were successfully dispatched.`);
+                alert("Batch complete!");
                 sending.value = false;
-                rfqMessage.value = '';
+                rfqText.value = '';
             };
 
-            onMounted(loadData);
-
-            return { uniqueCategories, selectedCategory, targetedVendors, rfqMessage, sending, bulkSendEmails };
+            return { vendors, categories, selectedCategory, rfqText, sending, handleLocalUpload, filteredVendors, dispatchBulk };
         }
     }).mount('#app')
 </script>
